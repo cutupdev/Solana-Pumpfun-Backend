@@ -1,27 +1,32 @@
 {
   "name": "pump-backend",
   "version": "1.0.0",
-  "type": "module",
-  "main": "index.js",
-  "repository": "https://github.com/microgift/pump-backend.git",
-  "author": "microgift <yeniguy28@gmail.com>",
-  "license": "MIT",
+  "main": "server.ts",
   "scripts": {
-    "start": "nodemon server.js"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon && tsx src/server.ts"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
   "dependencies": {
-    "body-parser": "^1.20.2",
+    "@solana/web3.js": "^1.91.8",
+    "bs58": "^5.0.0",
+    "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "joi": "^17.13.1",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.4.0"
+    "mongodb": "^6.6.2",
+    "mongoose": "^8.4.0",
+    "nodemon": "^3.1.0",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.24.5",
-    "@babel/node": "^7.23.9",
-    "@babel/preset-env": "^7.24.5",
-    "nodemon": "^3.1.0"
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
   }
 }

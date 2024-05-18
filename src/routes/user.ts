@@ -1,0 +1,138 @@
+// routes/users.js
+import express from 'express';
+import User from '../models/User';
+import PendingUser from '../models/PendingUser';
+import crypto from 'crypto'
+import Joi from 'joi';
+import base58 from 'bs58';
+import nacl from 'tweetnacl';
+import { PublicKey, Transaction } from '@solana/web3.js';
+
+const router = express.Router();
+
+// @route   POST api/users
+// @desc    Resgister user
+// @access  Public
+router.post('/', async (req, res) => {
+    // Validate form
+    const { body } = req;
+    const UserSchema = Joi.object().keys({
+        name: Joi.string().required(),
+        wallet: Joi.string().required(),
+        isLedger: Joi.boolean().optional().required(),
+    })
+    const inputValidation = UserSchema.validate(body);
+    // console.log(inputValidation)
+    if (inputValidation.error) {
+        return res.status(400).json({ error: inputValidation.error.details[0].message })
+    }
+    const wallet = body.wallet;
+
+    const userData = await User.findOne({ wallet });
+    // console.log(!userData)
+    if (!userData == null) res.status(409).send({ message: "A user with this wallet already exists." });
+    const exisitingPendingUser = await PendingUser.findOne({ wallet })
+    // console.log(exisitingPendingUser)
+    if (exisitingPendingUser == null) {
+        const nonce = crypto.randomBytes(8).toString('hex');
+        const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger:body.isLedger });
+        newPendingUser.save().then((user: PendingUserInfo) => res.status(200).send({ user}));
+    } else {
+        res.status(400).send({ message: "A user with this wallet already requested." });
+    }
+});
+
+// @route   POST api/users/:nonce
+// @desc    Confirm and Register user
+// @access  Public
+router.post('/confirm', async (req, res) => {
+    const { body } = req
+    console.log(body)
+    // Validate form
+    const UserSchema = Joi.object().keys({
+        name: Joi.string().required(),
+        wallet: Joi.string().required(),
+        nonce: Joi.string().required(),
+        signature: Joi.string().required(),
+        isLedger: Joi.boolean().optional().required()
+    })
+    const inputValidation = UserSchema.validate(body);
+    console.log(inputValidation)
+    if (inputValidation.error) {
+        return res.status(400).json({ error: inputValidation.error.details[0].message })
+    }
+    console.log("validation OK")
+    // const foundUser = await User.findOne({wallet : body.wallet})
+    // if(!foundUser == null ) return res.status(400).json("First of all, You have to register User")
+    const foundNonce = await PendingUser.findOne({ nonce: body.nonce }).exec();
+    if (foundNonce == null) return res.status(400).json("Your request expired")
+    // nonce  decode!!
+    if (!body.isLedger) {
+        const signatureUint8 = base58.decode(body.signature);
+        const msgUint8 = new TextEncoder().encode(`${process.env.SIGN_IN_MSG} ${foundNonce.nonce}`);
+        const pubKeyUint8 = base58.decode(body.wallet);
+        const isValidSignature = nacl.sign.detached.verify(msgUint8, signatureUint8, pubKeyUint8);
+        // const isValidSignature = true;
+        if (!isValidSignature) return res.status(404).json({ error: "Invalid signature" })
+    } else {
+        const ledgerSerializedTx = JSON.parse(body.signature);
+        const signedTx = Transaction.from(Uint8Array.from(ledgerSerializedTx));
+
+        const feePayer = signedTx.feePayer?.toBase58() || "";
+
+        if (feePayer != body.wallet) {
+            return res.status(400).json({ error: "Invalid wallet or fee payer" });
+        }
+
+        const MEMO_PROGRAM_ID = new PublicKey(
+            "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        );
+
+        const inx = signedTx.instructions.find(
+            (ix) => ix.programId.toBase58() == MEMO_PROGRAM_ID.toBase58()
+        );
+
+        if (!inx) {
+            return res
+                .status(503)
+                .json({ error: "Memo program couldn't be verified" });
+        }
+
+        if (!signedTx.verifySignatures()) {
+            return res
+                .status(503)
+                .json({ error: "Could not verify signatures" });
+        }
+    }
+    const userData = {
+        name: body.name,
+        wallet: body.wallet
+    }
+    const newUser = new User(userData);
+    await newUser.save().then((user: UserInfo)=> res.status(200).send(user))
+
+});
+
+
+// GET: Fetch all users
+router.get('/', async (req, res) => {
+    try {
+        const users = await User.find({});
+        res.status(200).send(users);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+export default router;
+
+export interface UserInfo {
+    name: string,
+    wallet: string
+}
+
+export interface PendingUserInfo {
+    name: string,
+    wallet: string,
+    nonce: string,
+}

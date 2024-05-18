@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "typeRoots": ["@types", "./node_modules/@types"],
+    "forceConsistentCasingInFileNames": true
+  },
+  "exclude": ["node_modules"]
+}
