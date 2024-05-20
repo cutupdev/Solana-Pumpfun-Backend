@@ -7,8 +7,11 @@ import Joi from 'joi';
 import base58 from 'bs58';
 import nacl from 'tweetnacl';
 import { PublicKey, Transaction } from '@solana/web3.js';
+import jwt from 'jsonwebtoken';
+
 
 const router = express.Router();
+
 
 // @route   POST api/users
 // @desc    Resgister user
@@ -35,12 +38,40 @@ router.post('/', async (req, res) => {
     // console.log(exisitingPendingUser)
     if (exisitingPendingUser == null) {
         const nonce = crypto.randomBytes(8).toString('hex');
-        const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger:body.isLedger });
-        newPendingUser.save().then((user: PendingUserInfo) => res.status(200).send({ user}));
+        const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger: body.isLedger });
+        newPendingUser.save().then((user: PendingUserInfo) => res.status(200).send({ user }));
     } else {
         res.status(400).send({ message: "A user with this wallet already requested." });
     }
 });
+
+// @route   POST api/users/login
+// @desc    Resgister user
+// @access  Public
+router.post('/login', async (req, res) => {
+    try {
+        console.log(req.body)
+        const { wallet } = req.body;
+        const user = await User.findOne({ wallet })
+        if (!user) {
+            res.status(404).json({ message: 'User not found' });
+        } else {
+            console.log(user)
+            const token = jwt.sign({
+                id: user._id,
+                name: user.name,
+                wallet
+            }, 'secret',
+                {
+                    algorithm: 'HS256',
+                    expiresIn: '60m',
+                })
+                return res.status(200).json({ token });
+        }
+    } catch (error) {
+        res.status(500).json({ error })
+    }
+})
 
 // @route   POST api/users/:nonce
 // @desc    Confirm and Register user
@@ -109,7 +140,7 @@ router.post('/confirm', async (req, res) => {
         wallet: body.wallet
     }
     const newUser = new User(userData);
-    await newUser.save().then((user: UserInfo)=> res.status(200).send(user))
+    await newUser.save().then((user: UserInfo) => res.status(200).send(user))
 
 });
 

@@ -2,6 +2,7 @@ import express from "express";
 import Joi from "joi";
 import Coin from "../models/Coin";
 import { Schema, Types } from "mongoose";
+import { AuthRequest, auth } from "../middleware/authorization";
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.get('/:userID', (req, res) => {
 // @route   POST /coin
 // @desc    Create coin
 // @access  Public
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req: AuthRequest, res) => {
     const { body } = req;
     const UserSchema = Joi.object().keys({
         creator: Joi.string().required(),
@@ -37,6 +38,8 @@ router.post('/', async (req, res) => {
         token: Joi.string().required(),
         amount: Joi.number().required()
     });
+    
+    console.log(req.user);
     const inputValidation = UserSchema.validate(body);
     // console.log(inputValidation)
     if (inputValidation.error) {
