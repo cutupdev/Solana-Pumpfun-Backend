@@ -7,10 +7,10 @@ const coinSchema = new mongoose.Schema({
     name: { type: String, required: true, },
     ticker: { type: String, required: true, },
     description: { type: String },
-    token: { type: String, required: true },
-    price: { type: Number, requried: true },
-    amount: { type: Number, required: true },
-    image: { type: String }
+    token: { type: String,  },
+    reserve2: { type: Number},
+    reserve1: { type: Number},
+    image: { type: String, required: true }
 
 });
 

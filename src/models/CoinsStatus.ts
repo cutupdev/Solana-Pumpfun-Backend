@@ -1,13 +1,14 @@
 // models/Coin.js
-import { required } from 'joi';
+import { number, required } from 'joi';
 import mongoose from 'mongoose';
 
 const coinStatusSchema = new mongoose.Schema({
     coinId: { type: mongoose.Schema.Types.ObjectId, ref: 'coin', required: true },
     record: [{
         holder: { type: mongoose.Schema.Types.ObjectId, ref: 'user', required: true },
-        holdingStatus: { type: Boolean, required: true },
-        time: { type: Date, default: Date.now},
+        holdingStatus: { type: Number, required: true },
+        time: { type: Date, default: Date.now },
+        amount: { type: Number }
     }
     ]
 });

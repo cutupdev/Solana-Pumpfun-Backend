@@ -33,7 +33,7 @@ router.post('/', async (req, res) => {
 
     const userData = await User.findOne({ wallet });
     // console.log(!userData)
-    if (!userData == null) res.status(409).send({ message: "A user with this wallet already exists." });
+    if (!userData == null) res.status(200).send(userData);
     const exisitingPendingUser = await PendingUser.findOne({ wallet })
     // console.log(exisitingPendingUser)
     if (exisitingPendingUser == null) {
@@ -77,7 +77,13 @@ router.post('/login', async (req, res) => {
 // @desc    Confirm and Register user
 // @access  Public
 router.post('/confirm', async (req, res) => {
-    const { body } = req
+    const body = {
+        name: req.body.name,
+        wallet: req.body.wallet,
+        isLedger: req.body.isLedger,
+        signature: req.body.signature,
+        nonce: req.body.nonce,
+    }
     console.log(body)
     // Validate form
     const UserSchema = Joi.object().keys({
