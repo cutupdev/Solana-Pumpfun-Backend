@@ -10,6 +10,8 @@ export interface AddLiquidityArgs {
 
 export interface AddLiquidityAccounts {
   pool: PublicKey
+  /** CHECK */
+  globalAccount: PublicKey
   liquidityProviderAccount: PublicKey
   mintTokenOne: PublicKey
   poolTokenAccountOne: PublicKey
@@ -33,6 +35,7 @@ export function addLiquidity(
 ) {
   const keys: Array<AccountMeta> = [
     { pubkey: accounts.pool, isSigner: false, isWritable: true },
+    { pubkey: accounts.globalAccount, isSigner: false, isWritable: true },
     {
       pubkey: accounts.liquidityProviderAccount,
       isSigner: false,

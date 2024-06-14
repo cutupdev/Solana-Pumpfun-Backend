@@ -1,17 +1,17 @@
 import { TokenStandard, createAndMint, mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
 import { Instruction, createSignerFromKeypair, generateSigner, percentAmount, signerIdentity } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
-import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SYSVAR_RENT_PUBKEY, Signer, SystemProgram, Transaction, TransactionResponse, clusterApiUrl, sendAndConfirmTransaction } from "@solana/web3.js";
+import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SYSVAR_RENT_PUBKEY, Signer, SystemProgram, Transaction, TransactionResponse, VersionedTransaction, clusterApiUrl, sendAndConfirmTransaction } from "@solana/web3.js";
 import base58 from "bs58";
 import { Types } from "mongoose";
 import Coin from "../models/Coin";
-import { createLPIx, initializeIx } from "./web3Provider";
+import { createLPIx, initializeIx, removeLiquidityIx } from "./web3Provider";
 import { web3 } from "@coral-xyz/anchor";
 import NodeWallet from "@coral-xyz/anchor/dist/cjs/nodewallet";
 import { PROGRAM_ID } from "./cli/programId";
 import { AccountType, TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
 import { BN } from "bn.js";
-import { SwapAccounts, SwapArgs, removeLiquidity, swap } from "./cli/instructions";
+import { SwapAccounts, SwapArgs, swap } from "./cli/instructions";
 import * as anchor from "@coral-xyz/anchor"
 import { ASSOCIATED_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/utils/token";
 import { LiquidityPool } from "./cli/accounts";
@@ -19,16 +19,17 @@ import { string } from "joi";
 import { Int32 } from "mongodb";
 import { setCoinStatus } from "../routes/coinStatus";
 import CoinStatus from "../models/CoinsStatus";
+import { simulateTransaction } from "@coral-xyz/anchor/dist/cjs/utils/rpc";
 
 const curveSeed = "CurveConfiguration"
 const POOL_SEED_PREFIX = "liquidity_pool"
 const LP_SEED_PREFIX = "LiqudityProvider"
 
-const connection = new Connection(clusterApiUrl('devnet'))
+export const connection = new Connection(clusterApiUrl('devnet'))
 
 const privateKey = base58.decode(process.env.PRIVATE_KEY!);
 
-const adminKeypair = web3.Keypair.fromSecretKey(privateKey);
+export const adminKeypair = web3.Keypair.fromSecretKey(privateKey);
 const adminWallet = new NodeWallet(adminKeypair);
 
 // const umi = createUmi(process.env.PUBLIC_SOLANA_RPC!);
@@ -45,6 +46,7 @@ umi.use(mplTokenMetadata());
 export const initializeTx = async () => {
     const initTx = await initializeIx(adminWallet.publicKey);
     const createTx = new Transaction().add(initTx.ix);
+    console.log(adminWallet.publicKey.toBase58())
 
     createTx.feePayer = adminWallet.publicKey;
     createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
@@ -77,6 +79,7 @@ export const createToken = async (data: CoinInfo) => {
         // amount: tx.amount,
         token: mint.publicKey
     })
+    await sleep(5000);    
     // await initializeTx();
     // const createTx = new Transaction().add(lpTx.ix);
     const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)
@@ -89,7 +92,7 @@ export const createToken = async (data: CoinInfo) => {
     const checkTx = await checkTransactionStatus(txId);
     if (checkTx) {
         const res = await newCoin.save();
-        const newCoinStatus =new CoinStatus({
+        const newCoinStatus = new CoinStatus({
             coinId: res._id,
             record: [
                 {
@@ -146,8 +149,13 @@ export const swapTx = async (
             [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer()],
             PROGRAM_ID
         )
+        const [globalAccount] = PublicKey.findProgramAddressSync(
+            [Buffer.from("global")],
+            PROGRAM_ID
+        )
+        
         const poolTokenOne = await getAssociatedTokenAddress(
-            mint1, poolPda, true
+            mint1, globalAccount, true
         )
         const userAta1 = await getAssociatedTokenAddress(
             mint1, adminKeypair.publicKey
@@ -161,6 +169,7 @@ export const swapTx = async (
         const acc: SwapAccounts = {
             dexConfigurationAccount: curveConfig,
             pool: poolPda,
+            globalAccount,
             mintTokenOne: mint1,
             poolTokenAccountOne: poolTokenOne,
             userTokenAccountOne: userAta1,
@@ -170,7 +179,7 @@ export const swapTx = async (
             rent: SYSVAR_RENT_PUBKEY,
             systemProgram: SystemProgram.programId
         }
-       
+
         const dataIx = await swap(args, acc, PROGRAM_ID)
         const tx = new Transaction().add(dataIx);
         tx.feePayer = adminKeypair.publicKey
@@ -188,24 +197,71 @@ const logTx = connection.onLogs(PROGRAM_ID, async (logs, ctx) => {
     if (logs.err !== null) {
         return undefined
     }
-    if(logs.logs[1].includes('AddLiquidity')){
+    if (logs.logs[1].includes('AddLiquidity')) {
         return undefined
     }
     console.log(logs)
     // Get parsed log data
-    const parsedData:ResultType = parseLogs(logs.logs, logs.signature);
+    const parsedData: ResultType = parseLogs(logs.logs, logs.signature);
     console.log(parsedData);
 
-    if(parsedData.reserve2 > 80_000_000_000 ){
+    if (parsedData.reserve2 > 80_000_000_000) {
         // Remove liquidity poll and move to Raydium
         //  removeLiquidity()
-        return ;
+        return;
     }
     await setCoinStatus(parsedData)
 
 
 }, "confirmed")
 
+// Remove liquidity pool and Create Raydium Pool
+export const createRaydium = async (mint1: PublicKey) => {
+    const amountOne = 1000_000_000_000;
+    const amountTwo = 1000_000_000_000;
+    const radyiumIx = await removeLiquidityIx(mint1, adminKeypair.publicKey, connection);
+
+    if (radyiumIx == undefined) return;
+    for (const iTx of radyiumIx.willSendTx) {
+        if (iTx instanceof VersionedTransaction) {
+            iTx.sign([adminKeypair]);
+            await connection.sendTransaction(iTx, {
+                skipPreflight: true
+            });
+        } else {
+            await sendAndConfirmTransaction(connection, iTx, [adminKeypair], {
+                skipPreflight: true
+            });
+        }
+    }
+    // console.log(await connection.simulateTransaction(radyiumIx.tx1))
+    // await connection.sendTransaction(radyiumIx.tx1, [adminKeypair]);
+
+
+    const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({units: 400_000}));
+
+    for (let i = 0; i < radyiumIx.ixs.length; i++) {
+        tx.add(radyiumIx.ixs[i]);
+    }
+
+    tx.feePayer = adminKeypair.publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+
+    // console.dir((await simulateTransaction(connection, tx)), { depth: null })
+    const ret = await simulateTransaction(connection, tx);
+
+    if (!ret.value.logs)    return "";
+    for (let i = 0; i < ret.value.logs?.length; i ++)
+        console.log(ret.value.logs[i]);
+
+    const sig = await sendAndConfirmTransaction(connection, tx, [adminKeypair], { skipPreflight: true })
+
+    return sig;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 // Get swap(buy and sell)
 function parseLogs(logs: string[], tx: string) {
     const result: ResultType = {

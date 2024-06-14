@@ -7,7 +7,7 @@ import coinRoutes from './src/routes/coin'
 import messageRoutes from './src/routes/message'
 import { init } from './src/db/dbConncetion';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import { swapTx } from './src/program/web3';
+import { createRaydium, initializeTx, swapTx } from './src/program/web3';
 
 
 const app = express();
@@ -21,17 +21,25 @@ init()
 
 // http and swap test
 app.get('/', async (req, res) => {
-
-  console.log("swap test:::::::::::::::")
-  const mint1 = new PublicKey('5ub68BwusEqW3Ug6dW6jvhHov2ornz2Hr7C2eHvw5msk')
-  const user = Keypair.generate();
-  console.log(user.publicKey.toBase58())
-  const result = await swapTx(mint1 ,user  ) 
-  console.log("swap result", result)
+  
 
   console.log("WebHook Test")
   res.send('Pump backend is running! 🚀');
 });
+app.post('/', async (req, res) => {
+  const mint1 = new PublicKey('9tdPfbH1GteCXJdY3jH5FLagEG4mc568CebDCWMxnMAa')
+  // await initializeTx();
+  if (req.body.style == "raydium") {
+    const result = await createRaydium(mint1);
+    console.log("Sucess!!")
+  } else if (req.body.style == "swap") {
+    console.log("swap test:::::::::::::::")
+    const user = Keypair.generate();
+    console.log(user.publicKey.toBase58())
+    const result = await swapTx(mint1, user)
+    console.log("swap result", result)
+  } 
+})
 
 app.use('/users/', userRoutes);
 app.use('/coin/', coinRoutes);
