@@ -17,6 +17,7 @@ const router = express.Router();
 // @desc    Resgister user
 // @access  Public
 router.post('/', async (req, res) => {
+    console.log("wallet connect")
     // Validate form
     const { body } = req;
     const UserSchema = Joi.object().keys({
@@ -25,23 +26,25 @@ router.post('/', async (req, res) => {
         isLedger: Joi.boolean().optional().required(),
     })
     const inputValidation = UserSchema.validate(body);
-    // console.log(inputValidation)
     if (inputValidation.error) {
         return res.status(400).json({ error: inputValidation.error.details[0].message })
     }
     const wallet = body.wallet;
-
     const userData = await User.findOne({ wallet });
-    // console.log(!userData)
-    if (!userData == null) res.status(200).send(userData);
+    console.log("userdata:", userData)
+    console.log(!userData == false)
+    if (!userData == false) return res.status(200).send(userData);
     const exisitingPendingUser = await PendingUser.findOne({ wallet })
-    // console.log(exisitingPendingUser)
+    console.log("pending:", exisitingPendingUser)
     if (exisitingPendingUser == null) {
         const nonce = crypto.randomBytes(8).toString('hex');
         const newPendingUser = new PendingUser({ name: body.name, wallet, nonce, isLedger: body.isLedger });
-        newPendingUser.save().then((user: PendingUserInfo) => res.status(200).send({ user }));
+        console.log("newPendingUser::", newPendingUser)
+        newPendingUser.save().then((user: PendingUserInfo) => {
+            res.status(200).send(user)
+        });
     } else {
-        res.status(400).send({ message: "A user with this wallet already requested." });
+        res.status(400).json({ message: "A user with this wallet already requested." });
     }
 });
 
@@ -66,7 +69,7 @@ router.post('/login', async (req, res) => {
                     algorithm: 'HS256',
                     expiresIn: '60m',
                 })
-                return res.status(200).json({ token });
+            return res.status(200).json({ token });
         }
     } catch (error) {
         res.status(500).json({ error })
@@ -77,6 +80,7 @@ router.post('/login', async (req, res) => {
 // @desc    Confirm and Register user
 // @access  Public
 router.post('/confirm', async (req, res) => {
+    console.log("req.body:::", req.body)
     const body = {
         name: req.body.name,
         wallet: req.body.wallet,
@@ -84,14 +88,14 @@ router.post('/confirm', async (req, res) => {
         signature: req.body.signature,
         nonce: req.body.nonce,
     }
-    console.log(body)
+    console.log("body", body)
     // Validate form
     const UserSchema = Joi.object().keys({
         name: Joi.string().required(),
         wallet: Joi.string().required(),
         nonce: Joi.string().required(),
         signature: Joi.string().required(),
-        isLedger: Joi.boolean().optional().required()
+        isLedger: Joi.boolean().optional().required(),
     })
     const inputValidation = UserSchema.validate(body);
     console.log(inputValidation)
@@ -101,8 +105,9 @@ router.post('/confirm', async (req, res) => {
     console.log("validation OK")
     // const foundUser = await User.findOne({wallet : body.wallet})
     // if(!foundUser == null ) return res.status(400).json("First of all, You have to register User")
-    const foundNonce = await PendingUser.findOne({ nonce: body.nonce }).exec();
+    const foundNonce = await PendingUser.findOneAndDelete({ nonce: body.nonce }).exec();
     if (foundNonce == null) return res.status(400).json("Your request expired")
+
     // nonce  decode!!
     if (!body.isLedger) {
         const signatureUint8 = base58.decode(body.signature);
@@ -150,8 +155,7 @@ router.post('/confirm', async (req, res) => {
 
 });
 
-
-// GET: Fetch all users
+// GET: Fetch user
 router.get('/', async (req, res) => {
     try {
         const users = await User.find({});
@@ -161,11 +165,26 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET: Fetch all users
+router.get('/:id', async (req, res) => {
+    const id = req.params.id;
+    console.log(id);
+    try {
+        const user = await User.findOne({ _id: id });
+        res.status(200).send(user);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+
+
 export default router;
 
 export interface UserInfo {
     name: string,
-    wallet: string
+    wallet: string,
+    avatar?: string
 }
 
 export interface PendingUserInfo {

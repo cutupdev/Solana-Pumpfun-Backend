@@ -1,5 +1,4 @@
 // models/Coin.js
-import { required } from 'joi';
 import mongoose from 'mongoose';
 
 const coinSchema = new mongoose.Schema({
@@ -7,11 +6,11 @@ const coinSchema = new mongoose.Schema({
     name: { type: String, required: true, },
     ticker: { type: String, required: true, },
     description: { type: String },
-    token: { type: String,  },
-    reserve2: { type: Number},
-    reserve1: { type: Number},
-    image: { type: String, required: true }
-
+    token: { type: String, },
+    reserveOne: { type: Number, default: 100_000_000_000 },
+    reserveTwo: { type: Number, default: 300_000_000 },
+    url: { type: String, requried: true },
+    date:{type:Date, default:new Date}
 });
 
 const Coin = mongoose.model('Coin', coinSchema);

@@ -3,12 +3,13 @@ import { number, required } from 'joi';
 import mongoose from 'mongoose';
 
 const coinStatusSchema = new mongoose.Schema({
-    coinId: { type: mongoose.Schema.Types.ObjectId, ref: 'coin', required: true },
+    coinId: { type: mongoose.Schema.Types.ObjectId, ref: 'Coin', required: true },
     record: [{
-        holder: { type: mongoose.Schema.Types.ObjectId, ref: 'user', required: true },
+        holder: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
         holdingStatus: { type: Number, required: true },
         time: { type: Date, default: Date.now },
-        amount: { type: Number }
+        amount: { type: Number },
+        tx: { type: String, required: true }
     }
     ]
 });

@@ -1,5 +1,5 @@
 import express from "express";
-import Message from "../models/message";
+import Message from "../models/Feedback";
 import { Date, Types } from "mongoose";
 import { AuthRequest, auth } from "../middleware/authorization";
 
@@ -10,7 +10,8 @@ const router = express.Router();
 // @access  Public
 router.get('/coin/:coinId', (req, res) => {
     const coinId: string = req.params.coinId;
-    Message.find({ coinId }).then(messages => res.status(200).send(messages))
+    console.log(coinId)
+    Message.find({ coinId }).populate('coinId','sender').then(messages => res.status(200).send(messages))
         .catch(err => res.status(400).json(err));
 })
 
@@ -26,7 +27,7 @@ router.get('/user/:userId', (req, res) => {
 // @route   POST /message/
 // @desc    Save new Message
 // @access  Public
-router.post('/', auth, async (req: AuthRequest, res) => {
+router.post('/', async (req, res) => {
     const { body } = req;
     try {
         const newMsg = new Message(body);

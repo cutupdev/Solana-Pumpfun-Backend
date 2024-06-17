@@ -20,10 +20,15 @@ import { Int32 } from "mongodb";
 import { setCoinStatus } from "../routes/coinStatus";
 import CoinStatus from "../models/CoinsStatus";
 import { simulateTransaction } from "@coral-xyz/anchor/dist/cjs/utils/rpc";
+import pinataSDK from '@pinata/sdk';
+
 
 const curveSeed = "CurveConfiguration"
 const POOL_SEED_PREFIX = "liquidity_pool"
 const LP_SEED_PREFIX = "LiqudityProvider"
+const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY
+const PINATA_GATEWAY_URL = process.env.PINATA_GATEWAY_URL;
+
 
 export const connection = new Connection(clusterApiUrl('devnet'))
 
@@ -41,7 +46,27 @@ const userWalletSigner = createSignerFromKeypair(umi, userWallet);
 umi.use(signerIdentity(userWalletSigner));
 umi.use(mplTokenMetadata());
 
+export const uploadMetadata = async (data: CoinInfo): Promise<any> => {
+    // const url = data.url;
+    const url = 'https://api.pinata.cloud/pinning/pinFileToIPFS/'
+    console.log(data)
+    const metadata = {
+        name: data.name,
+        ticker: data.ticker,
+        URL: data.url,
+        description: data.description,
+    }
+    const pinata = new pinataSDK({ pinataJWTKey: PINATA_SECRET_API_KEY });
 
+    try {
+        const res = await pinata.pinJSONToIPFS(metadata);
+        console.log(res, "======")
+        return res
+    } catch (error) {
+        console.error('Error uploading metadata: ', error);
+        return error;
+    }
+}
 // Initialize Transaction for smart contract
 export const initializeTx = async () => {
     const initTx = await initializeIx(adminWallet.publicKey);
@@ -55,20 +80,21 @@ export const initializeTx = async () => {
     console.log("txId:", txId)
 }
 
+
 // Create Token and add liquidity transaction
 export const createToken = async (data: CoinInfo) => {
+    const uri = await uploadMetadata(data);
 
     const mint = generateSigner(umi);
-    // console.log("User wallet: ", userWallet.publicKey);
     const tx = createAndMint(umi, {
         mint,
         authority: umi.identity,
         name: data.name,
         symbol: data.ticker,
-        uri: data.image,
+        uri: data.url,
         sellerFeeBasisPoints: percentAmount(0),
         decimals: 6,
-        amount: 1000_000_000_000_000,
+        amount: 100_000_000_000,
         tokenOwner: userWallet.publicKey,
         tokenStandard: TokenStandard.Fungible,
     })
@@ -79,9 +105,6 @@ export const createToken = async (data: CoinInfo) => {
         // amount: tx.amount,
         token: mint.publicKey
     })
-    await sleep(5000);    
-    // await initializeTx();
-    // const createTx = new Transaction().add(lpTx.ix);
     const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)
     const createTx = new Transaction().add(lpTx.ix);
     createTx.feePayer = adminWallet.publicKey;
@@ -91,20 +114,34 @@ export const createToken = async (data: CoinInfo) => {
     console.log("txId:", txId)
     const checkTx = await checkTransactionStatus(txId);
     if (checkTx) {
-        const res = await newCoin.save();
+        const urlSeg = data.url.split('/');
+        const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
+        console.log(url)
+        console.log('great')
+        const newCoin = new Coin({
+            creator: data.creator,
+            name: data.name,
+            ticker: data.ticker,
+            description: data.description,
+            token: mint.publicKey,
+            url,
+        });
+        console.log(newCoin)
+        const response = await newCoin.save();
         const newCoinStatus = new CoinStatus({
-            coinId: res._id,
+            coinId: response._id,
             record: [
                 {
-                    holder: res.creator,
+                    holder: response.creator,
                     holdingStatus: 2,
                     amount: 0,
+                    tx: txId,
                 }
             ]
         })
         await newCoinStatus.save();
         console.log("Saved Successfully...");
-        return res
+        return response
     } else {
         return "transaction failed"
     }
@@ -153,7 +190,7 @@ export const swapTx = async (
             [Buffer.from("global")],
             PROGRAM_ID
         )
-        
+
         const poolTokenOne = await getAssociatedTokenAddress(
             mint1, globalAccount, true
         )
@@ -207,7 +244,7 @@ const logTx = connection.onLogs(PROGRAM_ID, async (logs, ctx) => {
 
     if (parsedData.reserve2 > 80_000_000_000) {
         // Remove liquidity poll and move to Raydium
-        //  removeLiquidity()
+        // createRaydium()
         return;
     }
     await setCoinStatus(parsedData)
@@ -238,7 +275,7 @@ export const createRaydium = async (mint1: PublicKey) => {
     // await connection.sendTransaction(radyiumIx.tx1, [adminKeypair]);
 
 
-    const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({units: 400_000}));
+    const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
 
     for (let i = 0; i < radyiumIx.ixs.length; i++) {
         tx.add(radyiumIx.ixs[i]);
@@ -250,8 +287,8 @@ export const createRaydium = async (mint1: PublicKey) => {
     // console.dir((await simulateTransaction(connection, tx)), { depth: null })
     const ret = await simulateTransaction(connection, tx);
 
-    if (!ret.value.logs)    return "";
-    for (let i = 0; i < ret.value.logs?.length; i ++)
+    if (!ret.value.logs) return "";
+    for (let i = 0; i < ret.value.logs?.length; i++)
         console.log(ret.value.logs[i]);
 
     const sig = await sendAndConfirmTransaction(connection, tx, [adminKeypair], { skipPreflight: true })
@@ -261,7 +298,7 @@ export const createRaydium = async (mint1: PublicKey) => {
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
+}
 // Get swap(buy and sell)
 function parseLogs(logs: string[], tx: string) {
     const result: ResultType = {
@@ -294,12 +331,11 @@ export interface CoinInfo {
     creator?: Types.ObjectId;
     name: string;
     ticker: string;
-    url?: string;
+    url: string;
     description?: string;
     token?: string;
     reserve1?: number;
     reserve2?: number;
-    image: string;
 }
 
 export interface ResultType {

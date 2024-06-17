@@ -11,13 +11,17 @@ export const setCoinStatus = async (data: ResultType) => {
     const newTx = {
         holder: userId?._id,
         holdingStatus: data.swapType,
-        amount: data.swapAmount
+        amount: data.swapAmount,
+        tx:data.tx
     }
 
-    await CoinStatus.findOne({ coinId: coinId?._id })
+    CoinStatus.findOne({ coinId: coinId?._id })
         .then((coinStatus) => {
             coinStatus?.record.push(newTx);
             coinStatus?.save()
         })
-    await Coin.findOneAndUpdate({ token: data.mint }, { reserve1: data.reserve1, reserve2: data.reserve2 }, { new: true })
+        console.log("Update coin when buy or sell", data)
+    const updateCoin =await Coin.findOneAndUpdate({ token: data.mint }, { reserveOne: data.reserve1, reserveTwo: data.reserve2 }, { new: true })
+    console.log("updat ed coin", updateCoin);
 }
+
