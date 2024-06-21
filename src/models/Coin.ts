@@ -7,8 +7,8 @@ const coinSchema = new mongoose.Schema({
     ticker: { type: String, required: true, },
     description: { type: String },
     token: { type: String, },
-    reserveOne: { type: Number, default: 100_000_000_000 },
-    reserveTwo: { type: Number, default: 300_000_000 },
+    reserveOne: { type: Number, default: 1_000_000_000_000_000 },
+    reserveTwo: { type: Number, default: 30_000_000_000 },
     url: { type: String, requried: true },
     date:{type:Date, default:new Date}
 });

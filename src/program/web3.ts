@@ -94,17 +94,18 @@ export const createToken = async (data: CoinInfo) => {
         uri: data.url,
         sellerFeeBasisPoints: percentAmount(0),
         decimals: 6,
-        amount: 100_000_000_000,
+        amount: 1000_000_000_000_000,
         tokenOwner: userWallet.publicKey,
         tokenStandard: TokenStandard.Fungible,
     })
     const mintTx = await tx.sendAndConfirm(umi)
-    console.log("Successfully minted 1 million tokens (", mint.publicKey, ")");
+    console.log(userWallet.publicKey, "Successfully minted 1 million tokens (", mint.publicKey, ")");
     const newCoin = new Coin({
         ...data,
         // amount: tx.amount,
         token: mint.publicKey
     })
+    await sleep(5000);
     const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)
     const createTx = new Transaction().add(lpTx.ix);
     createTx.feePayer = adminWallet.publicKey;
@@ -136,6 +137,7 @@ export const createToken = async (data: CoinInfo) => {
                     holdingStatus: 2,
                     amount: 0,
                     tx: txId,
+                    price: newCoin.reserveTwo/newCoin.reserveOne
                 }
             ]
         })

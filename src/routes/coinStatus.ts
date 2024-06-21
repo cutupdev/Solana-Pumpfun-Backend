@@ -12,7 +12,8 @@ export const setCoinStatus = async (data: ResultType) => {
         holder: userId?._id,
         holdingStatus: data.swapType,
         amount: data.swapAmount,
-        tx:data.tx
+        tx:data.tx,
+        price: data.reserve2/data.reserve1
     }
 
     CoinStatus.findOne({ coinId: coinId?._id })
