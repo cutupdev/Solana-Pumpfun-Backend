@@ -106,15 +106,15 @@ export const createToken = async (data: CoinInfo) => {
         token: mint.publicKey
     })
     await sleep(5000);
-    const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)
-    const createTx = new Transaction().add(lpTx.ix);
-    createTx.feePayer = adminWallet.publicKey;
-    createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+    try {
+        const lpTx = await createLPIx(new PublicKey(mint.publicKey), adminKeypair.publicKey)
+        const createTx = new Transaction().add(lpTx.ix);
+        createTx.feePayer = adminWallet.publicKey;
+        createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
 
-    const txId = await sendAndConfirmTransaction(connection, createTx, [adminKeypair]);
-    console.log("txId:", txId)
-    const checkTx = await checkTransactionStatus(txId);
-    if (checkTx) {
+        const txId = await sendAndConfirmTransaction(connection, createTx, [adminKeypair]);
+        console.log("txId:", txId)
+        // const checkTx = await checkTransactionStatus(txId);
         const urlSeg = data.url.split('/');
         const url = `${PINATA_GATEWAY_URL}/${urlSeg[urlSeg.length - 1]}`;
         console.log(url)
@@ -137,14 +137,14 @@ export const createToken = async (data: CoinInfo) => {
                     holdingStatus: 2,
                     amount: 0,
                     tx: txId,
-                    price: newCoin.reserveTwo/newCoin.reserveOne
+                    price: newCoin.reserveTwo / newCoin.reserveOne
                 }
             ]
         })
         await newCoinStatus.save();
         console.log("Saved Successfully...");
         return response
-    } else {
+    } catch (error) {
         return "transaction failed"
     }
 
